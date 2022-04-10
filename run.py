@@ -58,10 +58,12 @@ def eval_metrics(dataset, indices, q_ids, g_ids, q_camids, g_camids, max_rank=10
         q_camid = q_camids[q_idx]
 
         order = indices[q_idx]
+        remove = (g_ids[order] == q_id) & (g_camids[order] == q_camid)
+        keep = np.invert(remove)
 
         # compute cmc curve
         matches = (g_ids[order] == q_id).astype(np.int32)
-        raw_cmc = matches  # binary vector, positions with value 1 are correct matches
+        raw_cmc = matches[keep]  # binary vector, positions with value 1 are correct matches
 
         if not np.any(raw_cmc):
             # this condition is true when query identity does not appear in gallery
@@ -81,7 +83,6 @@ def eval_metrics(dataset, indices, q_ids, g_ids, q_camids, g_camids, max_rank=10
         num_valid_q += 1.
 
         # compute average precision
-        # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = raw_cmc.sum()
         tmp_cmc = raw_cmc.cumsum()
         tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
@@ -110,7 +111,7 @@ def eval_metrics(dataset, indices, q_ids, g_ids, q_camids, g_camids, max_rank=10
 
 dataset = 'Market'
 num_query = 3368
-k1, k2 = 26,7
+k1, k2 = 26,1
 
 with open(f'datasets/{dataset}/feat.pkl', 'rb') as f :
     features = pickle.load(f)  # (19281, 2048) [:100,:]
@@ -137,11 +138,10 @@ def select(id):
     return id in selected_ids
 
 selector = list(map(select, pids))
-print(sum(selector))
+print('samples', sum(selector))
 features = features[selector,:]
 pids = pids[selector]
 camids = camids[selector]
-print(pids.shape)
 
 features = torch.from_numpy(features)
 pids = torch.from_numpy(pids)
@@ -163,7 +163,7 @@ query_features = query_features.cuda()
 gallery_features = gallery_features.cuda()
 print(query_features.shape, gallery_features.shape)
 indices = gnn_reranking(query_features, gallery_features, k1, k2)
-evaluate_ranking_list(indices, query_pids, query_camids, gallery_pids, gallery_camids)
+#evaluate_ranking_list(indices, query_pids, query_camids, gallery_pids, gallery_camids)
 query_pids, gallery_pids, query_camids, gallery_camids = \
     query_pids.cpu().numpy(), gallery_pids.cpu().numpy(),\
     query_camids.cpu().numpy(), gallery_camids.cpu().numpy()
